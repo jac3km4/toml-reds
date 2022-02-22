@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use red4ext_rs::prelude::*;
 use toml::Value;
@@ -8,21 +8,28 @@ define_plugin! {
     author: "jekky",
     version: 1:0:0,
     on_register: {
-        register_function!("Toml.LoadConfig", load_value);
+        register_function!("Toml.LoadConfig", load_config);
     }
 }
 
-fn load_value(name: String) -> Ref<RED4ext::IScriptable> {
-    let path = PathBuf::from("r6")
-        .join("config")
-        .join(name)
-        .with_extension("toml");
+fn load_config(name: String) -> Ref<RED4ext::IScriptable> {
+    load_config_value(&name).unwrap_or(Ref::null())
+}
 
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|contents| contents.parse::<Value>().ok())
-        .map(construct_value)
-        .unwrap_or(Ref::null())
+fn load_config_value(name: &str) -> Option<Ref<RED4ext::IScriptable>> {
+    let exe = std::env::current_exe().ok()?;
+    let path: &Path = name.as_ref();
+    let path = exe
+        .parent()?
+        .parent()?
+        .parent()?
+        .join("r6")
+        .join("config")
+        .join(path.file_name()?)
+        .with_extension("toml");
+    let contents = std::fs::read_to_string(path).ok()?;
+    let value = contents.parse().ok()?;
+    Some(construct_value(value))
 }
 
 fn construct_value(val: Value) -> Ref<RED4ext::IScriptable> {
