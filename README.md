@@ -1,4 +1,4 @@
-## toml-reds
+## toml4reds
 
 ### usage
 - `r6/config/test.toml`
@@ -22,3 +22,8 @@
         file.Save();
     }
     ```
+
+### notes
+- saving config files is deferred until the game closes to avoid unnecessary IO, so you can't rely on a `Load` to observe changes made by `Save`
+  - if you want to keep track of your changes you should keep a reference to the ConfigFile or ConfigValue after loading
+  - you can call Save as often as you like because it doesn't actually write to a file

@@ -1,32 +1,54 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::thread;
 
 use red4ext_rs::prelude::*;
+use static_init::dynamic;
 use toml::value::Map;
 use toml::Value;
 
-define_plugin! {
+define_trait_plugin! {
     name: "toml4reds",
     author: "jekky",
-    version: 0:0:3,
-    on_register: {
-        register_function!("Toml.LoadConfig", |str: String| load_config(&str).unwrap_or_else(Ref::null));
+    plugin: TomlPlugin
+}
+
+struct TomlPlugin;
+
+impl Plugin for TomlPlugin {
+    fn version() -> Version {
+        Version::new(0, 0, 4)
+    }
+
+    fn post_register() {
+        register_function!("Toml.LoadConfig", |str: String| load_config(&str)
+            .unwrap_or_else(Ref::null));
         register_function!("Toml.SaveConfig", save_config);
+    }
+
+    fn unload() {
+        flush_configs()
     }
 }
 
-fn save_config(name: String, config: Ref<RED4ext::IScriptable>) {
-    let val = deconstruct_value(config);
-    thread::spawn(move || {
-        let str = toml::to_string_pretty(&val).unwrap();
-        std::fs::write(get_config_path(&name).unwrap(), str).unwrap();
-    });
-}
+#[dynamic]
+static mut DEFERRED_CONFIGS: HashMap<String, Value> = HashMap::new();
 
 fn load_config(name: &str) -> Option<Ref<RED4ext::IScriptable>> {
     let contents = std::fs::read_to_string(get_config_path(name)?).ok()?;
     let value = contents.parse().ok()?;
     Some(construct_value(value))
+}
+
+fn save_config(name: String, config: Ref<RED4ext::IScriptable>) {
+    let val = deconstruct_value(config);
+    DEFERRED_CONFIGS.write().insert(name, val);
+}
+
+fn flush_configs() {
+    for (name, conf) in &*DEFERRED_CONFIGS.read() {
+        let contents = toml::to_string_pretty(conf).unwrap();
+        std::fs::write(get_config_path(name).unwrap(), contents).unwrap();
+    }
 }
 
 fn get_config_path(name: &str) -> Option<PathBuf> {
