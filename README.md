@@ -26,4 +26,4 @@
 ### notes
 - saving config files is deferred until the game closes to avoid unnecessary IO, so you can't rely on a `Load` to observe changes made by `Save`
   - if you want to keep track of your changes you should keep a reference to the ConfigFile or ConfigValue after loading
-  - you can call Save as often as you like because it doesn't actually write to a file
+  - you can call Save as often as you like because it doesn't actually write to a file, it only stores the config to be written later
