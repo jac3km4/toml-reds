@@ -7,6 +7,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-red4ext-rs = { git = "https://github.com/jac3km4/red4ext-rs.git", rev = "v0.1.4" }
+red4ext-rs = { git = "https://github.com/jac3km4/red4ext-rs.git", rev = "v0.1.5" }
 toml = "0.5"
 static_init = "1"
