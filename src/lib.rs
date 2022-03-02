@@ -102,7 +102,7 @@ fn construct_value(val: Value) -> Ref<ffi::IScriptable> {
 }
 
 fn deconstruct_value(scriptable: Ref<ffi::IScriptable>) -> Value {
-    match rtti::get_type_name(rtti::get_scriptable_type(scriptable)) {
+    match rtti::get_type_name(rtti::class_of(scriptable) as *const _) {
         toml_value::STRING => {
             let str = call!(scriptable, "Get" () -> String);
             Value::String(str)
