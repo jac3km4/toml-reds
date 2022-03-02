@@ -33,13 +33,13 @@ impl Plugin for TomlPlugin {
 #[dynamic]
 static mut DEFERRED_CONFIGS: HashMap<String, Value> = HashMap::new();
 
-fn load_config(name: &str) -> Option<Ref<RED4ext::IScriptable>> {
+fn load_config(name: &str) -> Option<Ref<ffi::IScriptable>> {
     let contents = std::fs::read_to_string(get_config_path(name)?).ok()?;
     let value = contents.parse().ok()?;
     Some(construct_value(value))
 }
 
-fn save_config(name: String, config: Ref<RED4ext::IScriptable>) {
+fn save_config(name: String, config: Ref<ffi::IScriptable>) {
     let val = deconstruct_value(config);
     DEFERRED_CONFIGS.write().insert(name, val);
 }
@@ -65,80 +65,88 @@ fn get_config_path(name: &str) -> Option<PathBuf> {
     Some(path)
 }
 
-fn construct_value(val: Value) -> Ref<RED4ext::IScriptable> {
+fn construct_value(val: Value) -> Ref<ffi::IScriptable> {
     match val {
         Value::String(str) => {
-            call!("Toml.StringValue::New;String" (str) -> Ref<RED4ext::IScriptable>)
+            call!("Toml.StringValue::New;String" (str) -> Ref<ffi::IScriptable>)
         }
         Value::Integer(i) => {
-            call!("Toml.IntValue::New;Int64" (i) -> Ref<RED4ext::IScriptable>)
+            call!("Toml.IntValue::New;Int64" (i) -> Ref<ffi::IScriptable>)
         }
         Value::Float(f) => {
-            call!("Toml.FloatValue::New;Double" (f) -> Ref<RED4ext::IScriptable>)
+            call!("Toml.FloatValue::New;Double" (f) -> Ref<ffi::IScriptable>)
         }
         Value::Boolean(b) => {
-            call!("Toml.BoolValue::New;Bool" (b) -> Ref<RED4ext::IScriptable>)
+            call!("Toml.BoolValue::New;Bool" (b) -> Ref<ffi::IScriptable>)
         }
         Value::Datetime(dt) => {
-            call!("Toml.StringValue::New;String" (dt.to_string()) -> Ref<RED4ext::IScriptable>)
+            call!("Toml.StringValue::New;String" (dt.to_string()) -> Ref<ffi::IScriptable>)
         }
         Value::Array(arr) => {
-            let inst = call!("Toml.ArrayValue::New;" () -> Ref<RED4ext::IScriptable>);
+            let inst = call!("Toml.ArrayValue::New;" () -> Ref<ffi::IScriptable>);
             for val in arr {
                 let converted = construct_value(val);
-                call!(inst.clone(), "Push" (converted) -> ());
+                call!(inst, "Push" (converted) -> ());
             }
             inst
         }
         Value::Table(map) => {
-            let inst = call!("Toml.TableValue::New;" () -> Ref<RED4ext::IScriptable>);
+            let inst = call!("Toml.TableValue::New;" () -> Ref<ffi::IScriptable>);
             for (key, val) in map {
                 let converted = construct_value(val);
-                call!(inst.clone(), "AddEntry" (key, converted) -> ());
+                call!(inst, "AddEntry" (key, converted) -> ());
             }
             inst
         }
     }
 }
 
-fn deconstruct_value(scriptable: Ref<RED4ext::IScriptable>) -> Value {
-    match red4ext_rs::rtti::get_type_name(scriptable.clone())
-        .to_string_lossy()
-        .as_ref()
-    {
-        "Toml.StringValue" => {
+fn deconstruct_value(scriptable: Ref<ffi::IScriptable>) -> Value {
+    match rtti::get_type_name(rtti::get_scriptable_type(scriptable)) {
+        toml_value::STRING => {
             let str = call!(scriptable, "Get" () -> String);
             Value::String(str)
         }
-        "Toml.IntValue" => {
+        toml_value::INT => {
             let i = call!(scriptable, "Get" () -> i64);
             Value::Integer(i)
         }
-        "Toml.FloatValue" => {
+        toml_value::FLOAT => {
             let f = call!(scriptable, "Get" () -> f64);
             Value::Float(f)
         }
-        "Toml.BoolValue" => {
+        toml_value::BOOL => {
             let bool = call!(scriptable, "Get" () -> bool);
             Value::Boolean(bool)
         }
-        "Toml.ArrayValue" => {
-            let values = call!(scriptable, "Get" () -> Vec<Ref<RED4ext::IScriptable>>);
+        toml_value::ARRAY => {
+            let values = call!(scriptable, "Get" () -> Vec<Ref<ffi::IScriptable>>);
             let mut buf = Vec::with_capacity(values.len());
             for val in values {
                 buf.push(deconstruct_value(val));
             }
             Value::Array(buf)
         }
-        "Toml.TableValue" => {
+        toml_value::TABLE => {
             let mut map = Map::new();
-            let keys = call!(scriptable.clone(), "GetKeys" () -> Vec<String>);
+            let keys = call!(scriptable, "GetKeys" () -> Vec<String>);
             for key in keys {
-                let entry = call!(scriptable.clone(), "GetEntry" (key.as_str()) -> Ref<RED4ext::IScriptable>);
+                let entry = call!(scriptable, "GetEntry" (key.as_str()) -> Ref<ffi::IScriptable>);
                 map.insert(key, deconstruct_value(entry));
             }
             Value::Table(map)
         }
         _ => unreachable!(),
     }
+}
+
+mod toml_value {
+    use red4ext_rs::prelude::CName;
+
+    pub const STRING: CName = CName::new("Toml.StringValue");
+    pub const INT: CName = CName::new("Toml.IntValue");
+    pub const FLOAT: CName = CName::new("Toml.FloatValue");
+    pub const BOOL: CName = CName::new("Toml.BoolValue");
+    pub const ARRAY: CName = CName::new("Toml.ArrayValue");
+    pub const TABLE: CName = CName::new("Toml.TableValue");
 }
